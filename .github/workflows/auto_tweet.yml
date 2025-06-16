@@ -2,11 +2,9 @@ name: Bot Tweet Otomatis
 
 on:
   schedule:
-    # Menjalankan setiap 90 menit.
-    # Baris pertama: jalankan pada menit ke-0 setiap 3 jam (00:00, 03:00, 06:00, dst.).
-    # Baris kedua: jalankan pada menit ke-30 setiap 3 jam, dimulai dari jam 1 (01:30, 04:30, 07:30, dst.).
-    - cron: '0 */3 * * *'
-    - cron: '30 1-23/3 * * *'
+    # Menjalankan setiap 8 jam sekali.
+    # '0 */8 * * *' = Pada menit ke-0, setiap 8 jam (00:00, 08:00, 16:00 UTC).
+    - cron: '0 */8 * * *'
   workflow_dispatch:
 
 jobs:
