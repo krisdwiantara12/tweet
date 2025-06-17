@@ -1,14 +1,17 @@
 import tweepy
 import os
 import random
-import requests # Library baru untuk mengunduh gambar
-import tempfile # Library untuk membuat file sementara
+import requests
+import tempfile
+from bs4 import BeautifulSoup # Library baru untuk scraping
 
 # --- KONFIGURASI ---
+JUMLAH_TRENDING = 10 # Ambil 10 tren teratas
+
 # Nama file-file Anda
 CAPTIONS_FILE = "captions.txt"
 LINKS_FILE = "links.txt"
-GAMBAR_FILE = "gambar.txt" # File baru untuk daftar URL gambar Anda
+GAMBAR_FILE = "gambar.txt"
 # --------------------
 
 def get_api_keys():
@@ -37,7 +40,6 @@ def get_random_content(filename):
 
 def download_image(image_url):
     """Mengunduh gambar dari URL dan menyimpannya ke file sementara."""
-    # Menambahkan header User-Agent untuk menghindari error 429 dari Imgur
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     try:
         response = requests.get(image_url, stream=True, headers=headers)
@@ -54,6 +56,43 @@ def download_image(image_url):
         print(f"❌ GAGAL mengunduh gambar dari {image_url}: {e}")
         return None
 
+def scrape_trending_topics():
+    """
+    Mengambil topik tren dengan scraping dari trends24.in.
+    Ini adalah 'hack' untuk menggantikan API Twitter yang berbayar.
+    """
+    print("🔄 Mencoba mengambil topik trending dari trends24.in...")
+    url = "https://trends24.in/indonesia/"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'lxml')
+        
+        # Cari daftar tren. Tren ada di dalam <li> di dalam <ol class="trend-card__list">
+        trend_list = soup.find('ol', class_='trend-card__list')
+        
+        if not trend_list:
+            print("🟡 Gagal menemukan daftar tren di halaman. Mungkin struktur website berubah.")
+            return ""
+            
+        trends = [item.get_text(strip=True) for item in trend_list.find_all('li')]
+        
+        if not trends:
+            print("🟡 Tidak ada tren yang ditemukan di dalam daftar.")
+            return ""
+
+        # Ambil sejumlah tren yang ditentukan dari paling atas (paling kiri/baru)
+        selected_trends = trends[:JUMLAH_TRENDING]
+        print(f"✅ Tren berhasil diambil: {' '.join(selected_trends)}")
+        return " ".join(selected_trends)
+        
+    except Exception as e:
+        print(f"❌ GAGAL melakukan scraping tren: {e}")
+        return "" # Kembalikan string kosong jika gagal, agar bot tidak berhenti
+
 def main():
     """Fungsi utama untuk menjalankan bot."""
     print("🚀 Memulai proses tweet otomatis...")
@@ -65,17 +104,21 @@ def main():
     api_v1 = tweepy.API(auth)
     client_v2 = tweepy.Client(consumer_key=api_keys["consumer_key"], consumer_secret=api_keys["consumer_secret"], access_token=api_keys["access_token"], access_token_secret=api_keys["access_token_secret"])
 
+    # --- Kumpulkan Konten ---
     caption_template = get_random_content(CAPTIONS_FILE)
     link_to_insert = get_random_content(LINKS_FILE)
     image_url_to_upload = get_random_content(GAMBAR_FILE)
+    trending_topics = scrape_trending_topics() # Panggil fungsi scraping baru
     
     if not caption_template:
         print("❌ Tidak ada template caption. Proses berhenti.")
         return
 
+    # --- Gabungkan Teks Tweet ---
     final_caption = caption_template.replace('{Link}', link_to_insert or "")
-    full_tweet_text = final_caption.strip()
+    full_tweet_text = f"{final_caption}\n\n{trending_topics}".strip()
 
+    # --- Proses dan Upload Gambar ---
     media_id = None
     temp_image_path = None
     if image_url_to_upload:
@@ -88,8 +131,9 @@ def main():
             except Exception as e:
                 print(f"❌ GAGAL mengunggah gambar ke Twitter: {e}")
     
+    # --- Kirim Tweet ---
     try:
-        print("🕊️  Mencoba memposting tweet...")
+        print(f"🕊️  Mencoba memposting tweet...")
         request_params = {"text": full_tweet_text}
         if media_id:
             request_params["media_ids"] = [media_id]
