@@ -5,9 +5,6 @@ import requests # Library baru untuk mengunduh gambar
 import tempfile # Library untuk membuat file sementara
 
 # --- KONFIGURASI ---
-WOEID_INDONESIA = 1020075
-JUMLAH_TRENDING = 10
-
 # Nama file-file Anda
 CAPTIONS_FILE = "captions.txt"
 LINKS_FILE = "links.txt"
@@ -38,27 +35,14 @@ def get_random_content(filename):
         print(f"❌ KESALAHAN: File '{filename}' tidak ditemukan.")
         return None
 
-def get_trending_topics(api):
-    """Mengambil topik tren dari Twitter."""
-    print("🔄 Mengambil topik trending...")
-    try:
-        trends = api.get_place_trends(id=WOEID_INDONESIA)
-        trending_items = [trend['name'] for trend in trends[0]['trends']]
-        if not trending_items: return ""
-        selected_trends = random.sample(trending_items, min(len(trending_items), JUMLAH_TRENDING))
-        return " ".join(selected_trends)
-    except Exception as e:
-        print(f"❌ GAGAL mengambil tren: {e}")
-        return ""
-
 def download_image(image_url):
     """Mengunduh gambar dari URL dan menyimpannya ke file sementara."""
+    # Menambahkan header User-Agent untuk menghindari error 429 dari Imgur
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     try:
-        response = requests.get(image_url, stream=True)
-        response.raise_for_status() # Cek jika ada error http
+        response = requests.get(image_url, stream=True, headers=headers)
+        response.raise_for_status()
         
-        # Membuat file sementara untuk menyimpan gambar
-        # 'delete=False' agar kita bisa menggunakan path-nya
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
         for chunk in response.iter_content(1024):
             temp_file.write(chunk)
@@ -81,20 +65,17 @@ def main():
     api_v1 = tweepy.API(auth)
     client_v2 = tweepy.Client(consumer_key=api_keys["consumer_key"], consumer_secret=api_keys["consumer_secret"], access_token=api_keys["access_token"], access_token_secret=api_keys["access_token_secret"])
 
-    # --- Kumpulkan Konten ---
     caption_template = get_random_content(CAPTIONS_FILE)
     link_to_insert = get_random_content(LINKS_FILE)
-    image_url_to_upload = get_random_content(GAMBAR_FILE) # Ambil URL gambar
-    trending_topics = get_trending_topics(api_v1)
+    image_url_to_upload = get_random_content(GAMBAR_FILE)
     
     if not caption_template:
         print("❌ Tidak ada template caption. Proses berhenti.")
         return
 
     final_caption = caption_template.replace('{Link}', link_to_insert or "")
-    full_tweet_text = f"{final_caption}\n\n{trending_topics}".strip()
+    full_tweet_text = final_caption.strip()
 
-    # --- Proses dan Upload Gambar ---
     media_id = None
     temp_image_path = None
     if image_url_to_upload:
@@ -107,7 +88,6 @@ def main():
             except Exception as e:
                 print(f"❌ GAGAL mengunggah gambar ke Twitter: {e}")
     
-    # --- Kirim Tweet ---
     try:
         print("🕊️  Mencoba memposting tweet...")
         request_params = {"text": full_tweet_text}
@@ -119,7 +99,6 @@ def main():
     except Exception as e:
         print(f"❌ GAGAL! Terjadi kesalahan saat memposting tweet: {e}")
     finally:
-        # Selalu hapus file gambar sementara setelah selesai
         if temp_image_path and os.path.exists(temp_image_path):
             os.remove(temp_image_path)
             print(f"🗑️  File sementara '{temp_image_path}' telah dihapus.")
