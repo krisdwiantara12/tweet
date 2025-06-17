@@ -3,11 +3,13 @@ import os
 import random
 import requests
 import tempfile
-import re # Library baru untuk membersihkan teks
+import re # Library untuk membersihkan teks
 from bs4 import BeautifulSoup # Library untuk scraping
 
 # --- KONFIGURASI ---
-JUMLAH_TRENDING = 3 # Dikurangi menjadi 3 untuk mengurangi risiko spam
+# Mengatur jumlah tren yang diambil ke angka yang lebih tinggi.
+# PERINGATAN: Menggunakan banyak tren sangat meningkatkan risiko tweet dianggap spam.
+JUMLAH_TRENDING = 20 
 
 # Nama file-file Anda
 CAPTIONS_FILE = "captions.txt"
@@ -118,9 +120,9 @@ def main():
     # --- Gabungkan Teks Tweet ---
     final_caption = caption_template.replace('{Link}', link_to_insert or "")
     
-    # Membuat format teks yang lebih natural
+    # Menggabungkan caption langsung dengan tren, tanpa label "Trending:"
     if trending_topics:
-        full_tweet_text = f"{final_caption}\n\nTrending:\n{trending_topics}".strip()
+        full_tweet_text = f"{final_caption} {trending_topics}".strip()
     else:
         full_tweet_text = final_caption.strip()
 
