@@ -3,10 +3,11 @@ import os
 import random
 import requests
 import tempfile
-from bs4 import BeautifulSoup # Library baru untuk scraping
+import re # Library baru untuk membersihkan teks
+from bs4 import BeautifulSoup # Library untuk scraping
 
 # --- KONFIGURASI ---
-JUMLAH_TRENDING = 10 # Ambil 10 tren teratas
+JUMLAH_TRENDING = 3 # Dikurangi menjadi 3 untuk mengurangi risiko spam
 
 # Nama file-file Anda
 CAPTIONS_FILE = "captions.txt"
@@ -58,8 +59,7 @@ def download_image(image_url):
 
 def scrape_trending_topics():
     """
-    Mengambil topik tren dengan scraping dari trends24.in.
-    Ini adalah 'hack' untuk menggantikan API Twitter yang berbayar.
+    Mengambil dan membersihkan topik tren dari trends24.in.
     """
     print("🔄 Mencoba mengambil topik trending dari trends24.in...")
     url = "https://trends24.in/indonesia/"
@@ -70,28 +70,29 @@ def scrape_trending_topics():
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, 'lxml')
-        
-        # Cari daftar tren. Tren ada di dalam <li> di dalam <ol class="trend-card__list">
         trend_list = soup.find('ol', class_='trend-card__list')
         
         if not trend_list:
-            print("🟡 Gagal menemukan daftar tren di halaman. Mungkin struktur website berubah.")
+            print("🟡 Gagal menemukan daftar tren di halaman.")
             return ""
             
-        trends = [item.get_text(strip=True) for item in trend_list.find_all('li')]
+        trends_raw = [item.get_text(strip=True) for item in trend_list.find_all('li')]
         
-        if not trends:
+        if not trends_raw:
             print("🟡 Tidak ada tren yang ditemukan di dalam daftar.")
             return ""
 
-        # Ambil sejumlah tren yang ditentukan dari paling atas (paling kiri/baru)
-        selected_trends = trends[:JUMLAH_TRENDING]
+        # Membersihkan tren dari angka dan 'K' di belakangnya
+        cleaned_trends = [re.sub(r'\d+K?$', '', trend).strip() for trend in trends_raw]
+        
+        # Ambil sejumlah tren yang ditentukan dari paling atas
+        selected_trends = cleaned_trends[:JUMLAH_TRENDING]
         print(f"✅ Tren berhasil diambil: {' '.join(selected_trends)}")
         return " ".join(selected_trends)
         
     except Exception as e:
         print(f"❌ GAGAL melakukan scraping tren: {e}")
-        return "" # Kembalikan string kosong jika gagal, agar bot tidak berhenti
+        return ""
 
 def main():
     """Fungsi utama untuk menjalankan bot."""
@@ -108,7 +109,7 @@ def main():
     caption_template = get_random_content(CAPTIONS_FILE)
     link_to_insert = get_random_content(LINKS_FILE)
     image_url_to_upload = get_random_content(GAMBAR_FILE)
-    trending_topics = scrape_trending_topics() # Panggil fungsi scraping baru
+    trending_topics = scrape_trending_topics()
     
     if not caption_template:
         print("❌ Tidak ada template caption. Proses berhenti.")
@@ -116,7 +117,12 @@ def main():
 
     # --- Gabungkan Teks Tweet ---
     final_caption = caption_template.replace('{Link}', link_to_insert or "")
-    full_tweet_text = f"{final_caption}\n\n{trending_topics}".strip()
+    
+    # Membuat format teks yang lebih natural
+    if trending_topics:
+        full_tweet_text = f"{final_caption}\n\nTrending:\n{trending_topics}".strip()
+    else:
+        full_tweet_text = final_caption.strip()
 
     # --- Proses dan Upload Gambar ---
     media_id = None
@@ -142,6 +148,7 @@ def main():
         print(f"✅ SUKSES! Tweet berhasil diposting. Tweet ID: {response.data['id']}")
     except Exception as e:
         print(f"❌ GAGAL! Terjadi kesalahan saat memposting tweet: {e}")
+        print("💡 TIP: Error 403 setelah upload gambar berhasil biasanya karena tweet dianggap spam. Coba ganti caption atau kurangi jumlah tren.")
     finally:
         if temp_image_path and os.path.exists(temp_image_path):
             os.remove(temp_image_path)
