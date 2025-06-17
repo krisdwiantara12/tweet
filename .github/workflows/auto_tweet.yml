@@ -18,8 +18,8 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          # Menambahkan 'requests' untuk mengunduh gambar
-          pip install tweepy requests
+          # Menambahkan 'beautifulsoup4' dan 'lxml' untuk scraping
+          pip install tweepy requests beautifulsoup4 lxml
       - name: Run Tweet Bot Script
         env:
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
